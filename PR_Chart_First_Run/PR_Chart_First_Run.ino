@@ -1,3 +1,7 @@
+/*  discussion: https://www.avrfreaks.net/forum/tutdis-polynomial-regression-gui
+ *  video tutorial: https://youtu.be/icBz3evB9uE
+ *  by Gen0me, https://github.com/63n0m3/PolynomialRegressionGUI-ard    btc: bc1qn8xgw5rlfm7xnxnrxcqk0ulhrmrqjy07s3zmfp
+*/
 #include <EEPROM.h>
 #include <MCUFRIEND_kbv.h>
 #define CH_TYPE float
