@@ -5,7 +5,7 @@
                                                                     /// Two last arguments describe how many places can dot be moved right(-1) and left(-1) to write the string array in human friendly notation
                                                                     /// Programmer should provide char array with enough length, and function will return the actuall length of written characters
                                                                     /// provide max_int_places that 1 <= max_int_places <= decimals_after_dot+1
-                                                                    /// by Gen0me, https://github.com/63n0m3/Stdlib_extension/   btc: bc1q5u49442fc08kugxp70xcer322njh3l5hplzw2k
+                                                                    /// by Gen0me, https://github.com/63n0m3/Stdlib_extension/   btc: bc1qn8xgw5rlfm7xnxnrxcqk0ulhrmrqjy07s3zmfp
 uint16_t dtostren0(double number, char* out_array, unsigned char decimals_after_dot, unsigned char flags, int16_t max_int_places, int16_t max_aftdec0){
   dtostre(number, out_array, decimals_after_dot, flags);
   int16_t is_minus = 0;
