@@ -4,7 +4,7 @@ class Custom_Button{  /// This class is an extension to functionality of Adafrui
     int16_t Top_Left_Y;     /// Alternatively it can also be a monochrome bitmap of uint8_t with true/false colors defined in initButton function
     const uint16_t* Bitmap_Progmem_Pos;     /// You can recall initButton function multiple times during execution of a program
     const uint8_t* Mask_Progmem_Pos;        /// This comes with example of usage and video tutorial.
-    const uint16_t* Bitmap_Progmem_Neg;     /// by Gen0me. Free to use. github.com/63n0m3/Custom_Button/ btc: bc1qn8xgw5rlfm7xnxnrxcqk0ulhrmrqjy07s3zmfp
+    const uint16_t* Bitmap_Progmem_Neg;     /// by Gen0me. Free to use. github.com/63n0m3/Custom_Button/ btc: 1A8Gqs2JwdjuAfFZ4cnM4CWy9hGFzsCpzK
     const uint8_t* Mask_Progmem_Neg;
     const uint8_t* Mon_Bitmap_Progmem;
     uint16_t Color_True;
