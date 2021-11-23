@@ -1,4 +1,4 @@
-                                                                    /// For example you can use this function to get instead of -1.7664e-01 -> -0.17664 or 6.8787e+01 -> 68.787
+                                                                    /// For example you can use this function to get instead of -1.7664e-01 -> -0.17664 or 6.8787e+01 -> 68.787 or just keep the e notation depending on the set of parameters
                                                                     /// This is the extended dtostre function. It displays floating numbers in a more human frendly way
                                                                     /// 4 first arguments are the same as in original dtostre function, however the third argument gets different meaning
                                                                     /// as it also describes number of displayed places if function uses more human friendly notation format
