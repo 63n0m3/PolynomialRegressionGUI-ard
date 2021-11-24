@@ -51,7 +51,7 @@ inline bool Is_Point_Inside_Square(int16_t Sx_min, int16_t Sx_max, int16_t Sy_mi
  *  There is a Chart_Gui class that inherits from Chart that is a proper user GUI
  *  It is written this way that the user can run Chart_Gui class on display and using physically touch screen add data points, set up coefficient function and save it to Eeprom
  *  After user can just run Calibr_Device class without screen, reading from EEPROM setup, using Load_From_Eeprom(..), and Calculate_Polynomial_At(..)
- *  Licence:  Free to use and distribute, under condition that this note in unchanged form is provided, and all changes to the original Gen0m3 source code are annotated.
+ *  Licence: MIT free use, distribute and profit with this copyright notice
  *  Discussion: https://www.avrfreaks.net/forum/tutdis-polynomial-regression-gui
  *  Video tutorial: https://youtu.be/icBz3evB9uE
  *  By Gen0me, https://github.com/63n0m3/PolynomialRegressionGUI-ard    btc: bc1qn8xgw5rlfm7xnxnrxcqk0ulhrmrqjy07s3zmfp
