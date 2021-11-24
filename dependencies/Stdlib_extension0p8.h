@@ -1,3 +1,4 @@
+                                                                    /// This function depends on dtostre(...)
                                                                     /// For example you can use this function to get instead of -1.7664e-01 -> -0.17664 or 6.8787e+01 -> 68.787 or just keep the e notation depending on the set of parameters
                                                                     /// This is the extended dtostre function. It displays floating numbers in a more human frendly way
                                                                     /// 4 first arguments are the same as in original dtostre function, however the third argument gets different meaning
@@ -5,6 +6,7 @@
                                                                     /// Two last arguments describe how many places can dot be moved right(-1) and left(-1) to write the string array in human friendly notation
                                                                     /// Programmer should provide char array with enough length, and function will return the actuall length of written characters
                                                                     /// provide max_int_places that 1 <= max_int_places <= decimals_after_dot+1
+                                                                    /// Licence: MIT Free tu use and distribute.
                                                                     /// by Gen0me, https://github.com/63n0m3/Stdlib_extension/   btc: bc1q5u49442fc08kugxp70xcer322njh3l5hplzw2k
 uint16_t dtostren0(double number, char* out_array, unsigned char decimals_after_dot, unsigned char flags, int16_t max_int_places, int16_t max_aftdec0){
   dtostre(number, out_array, decimals_after_dot, flags);
