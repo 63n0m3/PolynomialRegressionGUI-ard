@@ -9,6 +9,7 @@
 #include <dependencies/Extension_to_Adafruit1p0.hpp>
 #include <dependencies/PolynomialRegressionFloat.h>
 
+/// Write and read from eeprom functions for multi-byte varieables.
 void Write_To_Eeprom(uint16_t Addr, uint16_t Size_Bytes, byte* Var_Ptr){
   for(int16_t i=0; i<Size_Bytes; i++){
     byte byte_to_write = *(Var_Ptr+i);
@@ -33,6 +34,7 @@ inline bool Is_Point_Inside_Square(int16_t Sx_min, int16_t Sx_max, int16_t Sy_mi
   return false;
 }
 
+/// CH_TYPE is the basic type polynomial regression stores points and coefficient data in and performs calculations.
 #ifndef CH_TYPE
 #error pre - #define CH_TYPE  as float or double
 #endif
@@ -42,16 +44,20 @@ inline bool Is_Point_Inside_Square(int16_t Sx_min, int16_t Sx_max, int16_t Sy_mi
 */
 /** Overall structure looks like this
  *  There is a Polynomial_Regression function that does polynomial regression
- *  There is a Calibr_Device class that uses Polynomial_Regression function to fit data
+ *  There is a Calibr_Device class that uses Polynomial_Regression function to fit coefficients to points, and stores information about points.
+ *  Because Calibr_Device can work without GUI there are functions inside for manual(c++) setup. There is also save/read function in there. Once class is set-up you can save
+ *  it to eeprom, and with every next run you dont have to set it up again, you can just load it from the eeprom.
  *  There is a Chart class that uses pointer to Calibr_Device and it is a graphical chart display class for calibraiting Calibr_Device
  *  There is a Chart_Gui class that inherits from Chart that is a proper user GUI
- *  It is written this way that the user can run Chart_Gui class on display and using physically touch screen add data points, setup coefficient function and save it to Eeprom
+ *  It is written this way that the user can run Chart_Gui class on display and using physically touch screen add data points, set up coefficient function and save it to Eeprom
  *  After user can just run Calibr_Device class without screen, reading from EEPROM setup, using Load_From_Eeprom(..), and Calculate_Polynomial_At(..)
- *  discussion: https://www.avrfreaks.net/forum/tutdis-polynomial-regression-gui
- *  video tutorial: https://youtu.be/icBz3evB9uE
- *  by Gen0me, https://github.com/63n0m3/PolynomialRegressionGUI-ard    btc: bc1qn8xgw5rlfm7xnxnrxcqk0ulhrmrqjy07s3zmfp
+ *  Licence:  Free to use and distribute, under condition that this note in unchanged form is provided, and all changes to the original Gen0m3 source code are annotated.
+ *  Discussion: https://www.avrfreaks.net/forum/tutdis-polynomial-regression-gui
+ *  Video tutorial: https://youtu.be/icBz3evB9uE
+ *  By Gen0me, https://github.com/63n0m3/PolynomialRegressionGUI-ard    btc: bc1qn8xgw5rlfm7xnxnrxcqk0ulhrmrqjy07s3zmfp
  */
 
+/// Analog function to map from arduino, yet intended for other types
 CH_TYPE Map (CH_TYPE x, CH_TYPE in_min, CH_TYPE in_max, CH_TYPE out_min, CH_TYPE out_max){
   return (x-in_min)*(out_max-out_min)/(in_max-in_min) + out_min;
 }
@@ -60,8 +66,8 @@ class Calibr_Device {
 protected:
   uint16_t EEprom_Start_Addr;
   uint16_t EEprom_Last_Addr;
-public:             ///Those are public only for direct read acess to arrays, dont change those varieables and arrays. Class controls arrays memory allocation.
-  int16_t Points_num;
+public:             ///Those are public as classes using pointers to this class need to use them. Class controls arrays memory allocation.
+  int16_t Points_num;   /// Dont change this varieable
   uint16_t Coefficients_Auto_Calculate_Num_Settings;    /// should be protected
   uint16_t Coefficients_Calculate_Num;
   CH_TYPE * X_points;
@@ -103,7 +109,7 @@ public:             ///Those are public only for direct read acess to arrays, do
 
 protected:
   inline void Validity_Check(){
-    if (X_points == NULL || Y_points == NULL)   /// <------------------------------   Than its wrong, memory wasnt allocated, how to deal with it?
+    if (X_points == NULL || Y_points == NULL)   /// <-------------   Than its wrong, memory wasnt allocated, how to deal with it?
     return;
   }
 public:
@@ -114,7 +120,7 @@ public:
     max_coeff = max_coeff/8;
     Coefficients_Auto_Calculate_Num_Settings = 0xde38 + max_coeff;
   }
-  void Set_Coefficient_Number(uint16_t coeff_num){
+  void Set_Coefficient_Number(uint16_t coeff_num){                      /// Manual set up of coefficient calculation number
     Coefficients_Auto_Calculate_Num_Settings = coeff_num;
   }
   void Calculate_Polynomial_Coefficients(){                               /// This function calculates coefficients based on previous setup from "Set_Autodetermine_Max_Coefficient_Number(..)" or "Set_Coefficient_Number()" This function is better fitted to use with GUI.
@@ -136,7 +142,7 @@ public:
     Polynomial_coefficients = (CH_TYPE*) realloc (Polynomial_coefficients, (Coefficients_Calculate_Num+1)*sizeof(CH_TYPE));
     PolynomialRegression(X_points, Y_points, Points_num, Coefficients_Calculate_Num, Polynomial_coefficients);
   }
-  int16_t Find_Best_Fit_Coeff_Num(uint16_t max_coefficients){         /// <-----------------------------------  does it work correctly?
+  int16_t Find_Best_Fit_Coeff_Num(uint16_t max_coefficients){         /// <------- does it work correctly? it works by finding minimum of sum of square rests, howewer there are different models will be expanded in the future
     CH_TYPE tmp_coeff[max_coefficients];
     CH_TYPE sq_coeff_rests = PolynomialRegression(X_points, Y_points, Points_num, 1, Polynomial_coefficients);
     int16_t best_fit_num;
@@ -149,18 +155,19 @@ public:
     }
     return best_fit_num;
   }
-  CH_TYPE Calculate_Polynomial_At(CH_TYPE at){ ///Must previously run Calculate_Polynomial_Coefficients()
+                                               /// Calculates y based on x
+  CH_TYPE Calculate_Polynomial_At(CH_TYPE at){ /// Must previously run Calculate_Polynomial_Coefficients()
     CH_TYPE tmp_sum = 0;
     for (int16_t i=0; i<=Coefficients_Calculate_Num; i++){
         tmp_sum += Polynomial_coefficients[i] * pow (at, i);
     }
     return tmp_sum;
   }
-                                                              /// On the first Eeprom save use this function to set Save addresses, than with every eeprom load function gui-menu will remember addresses for save with bool Save_To_Eeprom(no args)
+                                                              /// On the first Eeprom save, use this function to set save-addresses
                                                               /// Before First save using Gui you need to run this function or Load_From_Eeprom(..) to set addresses
                                                               /// Returns true if not enough space, false on success
                                                               /// Keep in mind it is Last Address used, not Last Address + 1
-  bool Save_To_Eeprom(uint16_t Start_Addr, uint16_t Last_Addr){    ///This was coded to minimize eeprom writes, however if eeprom runs out of write cycles it is recommended to increase starting address by 8
+  bool Save_To_Eeprom(uint16_t Start_Addr, uint16_t Last_Addr){    ///This was coded to minimize eeprom writes, however if eeprom runs out of write cycles it is recommended to increase starting address by 8 Bytes
     if (Last_Addr-Start_Addr+1 < Get_Size_Required_For_Save()){
       return 1;
     }
@@ -222,7 +229,7 @@ public:
     }
     return 0;
   }
-  void Load_PointX_PointY_From_Arrays(uint16_t num_points, CH_TYPE* X_arr, CH_TYPE* Y_arr){
+  void Load_PointX_PointY_From_Arrays(uint16_t num_points, CH_TYPE* X_arr, CH_TYPE* Y_arr){ /// Never tested.
     Points_num = num_points;
     X_points = (CH_TYPE*) realloc(X_points, Points_num*sizeof(CH_TYPE));
     Y_points = (CH_TYPE*) realloc(Y_points, Points_num*sizeof(CH_TYPE));
@@ -232,20 +239,21 @@ public:
       Y_points[i] = Y_arr[i];
     }
   }
-  void Load_Coeff_From_Array(uint16_t num_coeff, CH_TYPE * coeff_arr){     /// Remember array should be of size: num_coeff+1 !!!
+  void Load_Coeff_From_Array(uint16_t num_coeff, CH_TYPE * coeff_arr){     /// Never tested. Remember array should be of size: num_coeff+1 !!!
     Coefficients_Calculate_Num = num_coeff;
     Polynomial_coefficients = (CH_TYPE*) realloc(Polynomial_coefficients, (Coefficients_Calculate_Num+1)*sizeof(CH_TYPE));
     for(int i=0; i<=Coefficients_Calculate_Num; i++)
       Polynomial_coefficients[i] = coeff_arr[i];
   }
-  int16_t Get_Size_Required_For_Save(){
+  int16_t Get_Size_Required_For_Save(){ /// For Save_To_Eeprom functions
     return 2*4 + sizeof(CH_TYPE)*2*Points_num +  sizeof(CH_TYPE)*(Coefficients_Calculate_Num+1);
   }
 
-  inline int16_t Get_Points_num(){
+  inline int16_t Get_Points_num(){  /// Returns the number of data points x/y
     return Points_num;
   }
-  void Add_Point(CH_TYPE x, CH_TYPE y){
+                                           ///Remember for many following functions you want to recalculate coefficients after
+  void Add_Point(CH_TYPE x, CH_TYPE y){    /// Manually adds point
     Points_num++;
     X_points = (CH_TYPE*) realloc(X_points, Points_num*sizeof(CH_TYPE));
     Y_points = (CH_TYPE*) realloc(Y_points, Points_num*sizeof(CH_TYPE));
@@ -290,23 +298,23 @@ public:
 
 class Chart {
 public:
-  uint16_t X_axis_descriptions; /// Number of value descriptions for axies. feel free to change them and than redraw gui
+  uint16_t X_axis_descriptions; /// Number of value descriptions for axies. Feel free to change them and than redraw gui
   uint16_t Y_axis_descriptions;
-  int16_t Point_Size;         /// How big the point is drawn. feel free to change.
+  int16_t Point_Size;         /// How big the point is drawn. Feel free to change it.
   int16_t Width;              /// Those are theoretically public, but never tested. In theory each of those varieables shouldnt break if manually change. Just recalculate entire chart after the change.
   int16_t Height;
   int16_t Top_Left_X;
   int16_t Top_Left_Y;
   int16_t Point_Position_Square_TL_From_Left;
   int16_t Point_Position_Square_TL_From_Top;
-  CH_TYPE X_highest_val;
+  CH_TYPE X_highest_val;    /// Those are calculated by the class highest and lowest axis values on the border of the chart
   CH_TYPE X_lowest_val;
   CH_TYPE Y_highest_val;
   CH_TYPE Y_lowest_val;
-  CH_TYPE Point_Selection_Max_Distance;
+  CH_TYPE Point_Selection_Max_Distance;     /// This is used to determine max distance of point selection clicks on the screen
   int16_t Point_Position_Background_Width;   // This one shouldnt be changed while point is selected
   int16_t Point_Position_Background_Height;
-  int16_t R_Menu_Top;
+  int16_t R_Menu_Top;                       /// class calculates this to determine positions of the right menu
   int16_t R_Menu_Bot;
 protected:
   int16_t* Polynomial_y_pixels;
@@ -345,7 +353,7 @@ public:
   ~Chart(){
     free(Polynomial_y_pixels);
   }
-  Add_Regression_Model(Calibr_Device* regression){
+  Add_Regression_Model(Calibr_Device* regression){  /// Sets up which Calibr_Device class to use
     Regression_Model = regression;
   }
 protected:
@@ -591,7 +599,7 @@ public:
     else return 0xffff;
   }
 
-  void Fit_Chart_Display_Size(){
+  void Fit_Chart_Display_Size(){    /// Calculates the chart boundaries to fit data points
     if (Tft == NULL) return;
     if (Regression_Model->Points_num>0){
       X_highest_val = Regression_Model->X_points[0];
@@ -631,7 +639,6 @@ public:
     Undraw_Point_Position();
     Currently_Selected_Point = 0xffff;
   }
-
 /*  Draw_Axis(){      /// Was used instead of Draw_X_Axis() and Draw_Y_Axis(), but positions are slightly off due to rounding
  //   Map_X_Pixel_to_Point
     uint16_t interval_x = (Width-42)/(X_axis_descriptions-1);
@@ -853,7 +860,7 @@ public:
   }
 };
 
-
+/// Gui bitmap and mask arrays
 const uint8_t Save_mask[] PROGMEM = { 0, 0, 0, 0, 0, 0, 15, 128, 0, 0, 0, 0, 63, 192, 0, 0, 0, 0, 120, 192, 0, 0, 0, 0, 224, 0, 0, 0, 0, 0, 224, 0, 0, 0, 0, 0, 224, 0, 248, 192, 113, 252, 224, 3, 252, 224, 115, 254, 248, 3, 14, 96, 103, 142, 124, 2, 14, 112, 231, 15, 63, 0, 6, 48, 199, 7, 15, 128, 126, 48, 207, 255, 7, 193, 254, 57, 207, 255, 1, 231, 254, 25, 142, 0, 0, 231, 14, 25, 134, 0, 0, 231, 14, 15, 135, 0, 192, 231, 30, 15, 7, 6, 255, 199, 254, 15, 3, 254, 255, 195, 254, 6, 1, 254, 127, 1, 230, 0, 0, 112, 0, 0, 0, 0, 0, 0};
 
 const uint16_t Add_Point2_arr[] PROGMEM = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2049, 2049, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8260, 35121, 47543, 55802, 55835, 57915, 55835, 51705, 41364, 20682, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8260, 55803, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 35121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28910, 57884, 57916, 57916, 57948, 57948, 58108, 58172, 58076, 57948, 57916, 55803, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33073, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 57916, 4098, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33040, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 4130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33104, 57916, 57916, 57980, 57980, 58012, 57948, 57948, 57948, 57948, 57948, 57884, 4130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33104, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 57884, 4130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30991, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 57884, 4130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30959, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 57884, 4130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28910, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 57884, 4130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28910, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57948, 57884, 4130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26861, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 57884, 4098, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26829, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 57884, 4098, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24780, 57884, 57916, 57916, 57948, 57948, 57948, 57948, 58044, 57948, 57916, 57884, 4098, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22699, 57884, 57916, 57916, 57916, 57948, 57948, 57948, 58140, 58140, 57916, 57884, 2050, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24780, 57884, 57916, 57916, 57916, 57916, 57948, 57948, 57948, 57948, 57916, 57884, 4098, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33040, 57884, 57916, 57916, 57916, 57916, 57948, 57948, 57948, 57948, 57916, 57916, 12390, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10309, 16520, 16520, 16520, 16520, 16520, 16520, 16520, 16520, 16520, 16520, 14439, 14439, 18569, 30991, 55803, 57884, 57916, 57916, 57916, 57916, 57948, 58172, 58460, 57948, 57948, 57916, 47543, 24780, 22699, 22731, 24780, 24780, 26861, 26861, 28910, 28910, 30991, 30991, 30991, 33040, 33040, 28910, 12390, 0, 0, 2049, 43381, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57916, 57916, 57916, 57916, 57916, 57916, 58140, 58492, 58364, 57948, 57948, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57883, 14471, 0, 22699, 57884, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57948, 57948, 57948, 57948, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57948, 57948, 57948, 57948, 57916, 41332, 0, 37170, 57884, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57948, 58108, 57980, 57948, 57916, 57916, 57916, 57916, 57916, 57948, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 53754, 0, 45462, 57884, 58268, 58652, 58684, 58684, 58684, 58684, 58684, 58684, 58684, 58684, 58684, 58684, 58716, 58460, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 58460, 58300, 58396, 58364, 58492, 58428, 58364, 58268, 58172, 58076, 58012, 57948, 57948, 57948, 57948, 57948, 57948, 57916, 57884, 4098, 49592, 57916, 58012, 58236, 58524, 58652, 58716, 58780, 58780, 58780, 58780, 58780, 58780, 58780, 58716, 58044, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57948, 58684, 58780, 58780, 58780, 58780, 58780, 58780, 58780, 58780, 58748, 58716, 58620, 58460, 58236, 58012, 57916, 57884, 6179, 51641, 57884, 57916, 57916, 57916, 57916, 57916, 57948, 58044, 58140, 58300, 58364, 58364, 58332, 58332, 58012, 57916, 57948, 57948, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 58108, 58236, 58236, 58236, 58236, 58236, 58204, 58204, 58204, 58204, 58204, 58172, 58172, 58172, 58044, 57916, 57884, 8260, 49592, 57916, 57916, 57948, 57916, 57916, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57948, 57980, 57980, 57948, 57980, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57980, 57980, 57980, 57980, 57980, 57980, 58012, 57980, 57980, 57948, 57948, 57948, 57980, 57980, 57980, 57884, 6179, 43382, 57884, 57916, 57948, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57980, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 57948, 57948, 57948, 57948, 57948, 57948, 57948, 57980, 57948, 57980, 57980, 57980, 57980, 57916, 57916, 55835, 2049, 35121, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57916, 57916, 57948, 57948, 57916, 57916, 57916, 57916, 57916, 57916, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 49592, 0, 20650, 55803, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57916, 57916, 57916, 57916, 57916, 57980, 57916, 57916, 57916, 57916, 57916, 57884, 57916, 57948, 57980, 57980, 57980, 57980, 57980, 57948, 57916, 57916, 57948, 57980, 57980, 57884, 33040, 0, 0, 45462, 55835, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 55804, 57884, 57884, 57884, 57916, 57916, 57916, 57948, 57916, 57916, 57916, 57980, 58044, 57948, 57852, 57884, 57948, 58012, 58012, 58012, 58012, 58012, 58012, 58012, 58012, 58012, 58012, 55963, 45494, 6179, 0, 0, 2049, 18569, 24748, 24844, 22859, 22827, 22827, 20778, 20746, 18730, 18697, 16648, 16616, 14471, 16520, 26829, 53722, 57852, 57884, 57884, 57916, 57916, 57916, 57916, 57916, 57916, 57916, 58076, 43445, 12390, 8260, 8260, 10309, 10309, 10309, 10309, 10309, 10309, 10309, 10309, 10309, 10309, 10309, 4130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26829, 57852, 57884, 57884, 57916, 57916, 57916, 57916, 57916, 57916, 57948, 58044, 16520, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16520, 57852, 57884, 57884, 57916, 57916, 57916, 57916, 57916, 57916, 57980, 58012, 10309, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14439, 57852, 57884, 57884, 57916, 57916, 57916, 57916, 57916, 57916, 57980, 58012, 10309, 0, 0, 0, 14755, 21060, 0, 0, 0, 0, 0, 0, 0, 10562, 48522, 29541, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14439, 57852, 57884, 57884, 57884, 57916, 57916, 57916, 57916, 57916, 57980, 58012, 10309, 0, 0, 23205, 61166, 61198, 33702, 0, 0, 0, 0, 0, 8417, 56907, 61197, 61196, 40070, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14439, 57852, 57884, 57884, 57884, 57884, 57916, 57916, 57916, 57916, 57980, 58012, 12390, 0, 14755, 61134, 61198, 61197, 61197, 35879, 0, 0, 0, 4257, 52715, 61197, 61196, 61195, 61194, 27396, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16488, 57852, 57884, 57884, 57884, 57884, 57916, 57916, 57916, 57916, 57948, 58012, 12390, 0, 42153, 61165, 61196, 61196, 61197, 61196, 40039, 32, 2112, 48522, 61197, 61196, 61195, 61194, 61161, 25283, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16488, 55804, 57884, 57884, 57884, 57884, 57884, 57916, 57884, 57884, 57948, 58012, 14439, 0, 12674, 56939, 61164, 61164, 61196, 61196, 61196, 46409, 48489, 61197, 61196, 61195, 61194, 61161, 35845, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14440, 55804, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57948, 58012, 14439, 0, 0, 10529, 54826, 61164, 61163, 61195, 61196, 61196, 61196, 61196, 61195, 61162, 61161, 40037, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14440, 55804, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57948, 58012, 16519, 0, 0, 0, 6369, 52681, 61163, 61163, 61195, 61195, 61195, 61195, 61162, 61161, 42182, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14440, 55804, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57916, 58012, 16520, 0, 0, 0, 0, 4224, 50601, 61164, 61163, 61195, 61163, 61162, 61162, 50631, 2112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14439, 55804, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57916, 58012, 16520, 0, 0, 0, 0, 0, 33734, 61164, 61163, 61163, 61162, 61162, 61162, 54889, 10529, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14439, 55804, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57948, 58012, 16520, 0, 0, 0, 0, 21092, 61164, 61164, 61163, 61162, 61162, 61162, 61162, 61194, 56937, 12674, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14439, 55804, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57948, 58012, 18569, 0, 0, 0, 16899, 61132, 61165, 61163, 61162, 61162, 61162, 61162, 61162, 61162, 61194, 59049, 16898, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14439, 55804, 57852, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57948, 58012, 18601, 0, 0, 14754, 59052, 61165, 61163, 61162, 61162, 56968, 42181, 61161, 61162, 61162, 61162, 61162, 59082, 21123, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14439, 55804, 57852, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57916, 57980, 18569, 0, 10529, 56972, 61165, 61163, 61162, 61162, 59049, 14754, 0, 29507, 61161, 61162, 61162, 61162, 61194, 59081, 6336, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6179, 55803, 55804, 55804, 57884, 57884, 57884, 57884, 57884, 57884, 57884, 57851, 10309, 0, 29509, 61165, 61164, 61162, 61162, 59081, 19010, 0, 0, 0, 25315, 59081, 61162, 61162, 61162, 52744, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26829, 53723, 55803, 55804, 55804, 55804, 55804, 55804, 55804, 53722, 28910, 0, 0, 2144, 50600, 61162, 61162, 61161, 25283, 0, 0, 0, 0, 0, 21090, 59081, 61161, 56968, 10593, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4130, 16520, 24780, 28910, 28911, 26830, 24748, 14440, 4098, 0, 0, 0, 0, 4224, 44326, 61161, 29540, 0, 0, 0, 0, 0, 0, 0, 16866, 40037, 10529, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8449, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -895,11 +902,11 @@ class Chart_Gui : public Chart{
 protected:
   Custom_Button Add_Data, Add_Point_B, Subtract_Point, Sample_Add, Calculate_B, Arrow_Right_B, Arrow_Left_B, Save_B;
   bool Add_Point_Menu_On;
-  CH_TYPE (*Get_Current_Input_fun_ptr)(void);
+  CH_TYPE (*Get_Current_Input_fun_ptr)(void);   /// This holds a pointer to function uset to manually obtain x values.
   Custom_Button Edit_Points_X, Edit_Points_Y;
   Custom_Button One_Btn, Two_Btn, Three_Btn, Four_Btn, Five_Btn, Six_Btn, Seven_Btn, Eight_Btn, Nine_Btn, Zero_Btn, Dot_Btn, Del_Btn, Min_Btn, Ok_Button, Return_Button;
   String Coefficients_Option_str;
-public:
+public:     /// X - top left x, Y - top left y, given in pixels. Last is the screen object.
   Chart_Gui(uint16_t X, uint16_t Y, int16_t width, int16_t height, uint8_t point_size, Adafruit_GFX* TFt) : Chart ( X, Y, width, height, point_size, TFt)/*, Edit_Points_X()*/{
         if (Tft == NULL);
         else Init_Buttons();
@@ -937,7 +944,7 @@ public:
      Add_Point_Menu_On = false;
   }
 private:
-  void Recalculate_Buttons_Positions(){
+  void Recalculate_Buttons_Positions(){     /// to recalculates buttons positions. For example after change size of the top coefficient equation screen size
     Save_B.Change_Position(Top_Left_X+Width-24, Top_Left_Y+R_Menu_Top+10);
     Add_Point_B.Change_Position(Top_Left_X+Width-24, Top_Left_Y+R_Menu_Top+46);
     Subtract_Point.Change_Position(Top_Left_X+Width-24, Top_Left_Y+R_Menu_Top+87);
@@ -1405,7 +1412,7 @@ private:
     }
   }
 public:
-  void Draw_Buttons(){
+  void Draw_Buttons(){ /// This class layer is runned this way that first is used once Draw_Buttons() and than after, in main loop Refresh_On_Cursor_Press() function. Hoverer look at Draw_Chart_Gui description.
     if (Tft == NULL) return;
     Recalculate_Buttons_Positions();
     Calculate_B.drawButton(true);
@@ -1433,11 +1440,11 @@ public:
     Serial.println(Map_Y_Point_to_Pixel(3.0f));
     Serial.println(Map_Y_Point_to_Pixel(2.0f));
     Serial.println(Map_Y_Point_to_Pixel(1.0f));*/
-  }
-  void Set_Get_Current_Input_Fun(CH_TYPE (*fun_ptr)(void)){
+  }                                                         /// Set to NULL to reset
+  void Set_Get_Current_Input_Fun(CH_TYPE (*fun_ptr)(void)){ /// Use this to set GUI automatically get x point value when adding new point
     Get_Current_Input_fun_ptr = fun_ptr;
   }
-  void Refresh_On_Cursor_Press(int16_t cursor_x, int16_t cursor_y){
+  void Refresh_On_Cursor_Press(int16_t cursor_x, int16_t cursor_y){  /// This class layer is runned this way that first is used once Draw_Buttons() and than after, in main loop Refresh_On_Cursor_Press() function. Hoverer look at Draw_Chart_Gui description.
     if (Tft == NULL) return;
     if (Add_Point_Menu_On == true){
       Refresh_Add_Point_Menu(cursor_x, cursor_y);
@@ -1539,7 +1546,7 @@ public:
     }
     else Cursor_Check_Point_Selection(cursor_x, cursor_y);
   }
-  void Draw_Chart_Gui(){
+  void Draw_Chart_Gui(){    /// Draws GUI. First call Recalculate_Chart_Scale_Wash_Screen(), than this function, and after in main loop: Refresh_On_Cursor_Press
     Draw_Polynomial_Equation();
     Draw_Axis();
     Draw_Polynomial();
